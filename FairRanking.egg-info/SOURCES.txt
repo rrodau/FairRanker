@@ -1,0 +1,9 @@
+README.md
+setup.py
+FairRanking/__init__.py
+FairRanking.egg-info/PKG-INFO
+FairRanking.egg-info/SOURCES.txt
+FairRanking.egg-info/dependency_links.txt
+FairRanking.egg-info/top_level.txt
+TestModels/DirectRankerTest.py
+TestModels/__init__.py

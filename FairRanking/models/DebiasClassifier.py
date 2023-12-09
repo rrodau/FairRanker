@@ -60,14 +60,14 @@ class DebiasClassifier(BaseDirectRanker):
         prev_neurons = self.num_features
         for i, num_neurons in enumerate(self.hidden_layers):
             layer = nn.Linear(prev_neurons, num_neurons)
-            self.kernel_initalizer(layer.weight) #TODO: don't know if that works
+            self.kernel_initializer(layer.weight) #TODO: don't know if that works
             self.feature_layers.append(layer)
             prev_neurons = num_neurons
 
         self.bias_layers = nn.ModuleList()  
         for num_neurons in self.bias_layers:
             layer = nn.Linear(prev_bias_neurons, num_neurons)
-            self.kernel_initalizer(layer.weight)
+            self.kernel_initializer(layer.weight)
             self.bias_layers.append(layer)
             prev_bias_neurons = num_neurons
 
@@ -75,7 +75,7 @@ class DebiasClassifier(BaseDirectRanker):
         self.additional_layers = nn.ModuleList()
         for num_neurons in self.bias_layers[:-1]:
             layer = nn.Linear(prev_neurons, num_neurons)
-            self.kernel_initalizer(layer.weight) #TODO: don't know if that works
+            self.kernel_initializer(layer.weight) #TODO: don't know if that works
             self.additional_layers.append(layer)
         
         self.output_layer = nn.Linear(prev_neurons, self.num_relevance_classes)

@@ -6,7 +6,7 @@ import torch.nn as nn
 
 
 
-class directRanker(nn.Module):
+class DirectRanker(nn.Module):
     """
     Constructor
     :param hidden_layers: List containing the numbers of neurons in the layers for feature

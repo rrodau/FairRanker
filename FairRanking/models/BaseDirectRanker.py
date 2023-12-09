@@ -54,6 +54,7 @@ class BaseDirectRanker(nn.Module):
                  num_features=0,
                  num_fair_classes=0,
                  save_dir=None):
+        super().__init__()
         self.hidden_layers = hidden_layers
         self.feature_activation = feature_activation
         self.ranking_activation = ranking_activation

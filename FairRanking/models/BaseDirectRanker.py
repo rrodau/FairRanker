@@ -199,3 +199,32 @@ class BaseDirectRanker(nn.Module):
             
         return in_noise 
         
+def build_pairs(x, y, samples):
+    """
+    :param x:
+    :param y:
+    :param y_bias:
+    :param samples:
+    """
+    x0 = []
+    x1 = []
+    y_train = []
+
+    keys, counts = np.unique(y, return_counts=True)
+    sort_ids = np.argsort(keys)
+    keys = keys[sort_ids]
+    counts = counts[sort_ids]
+    for i in range(len(keys) - 1):
+        indices0 = np.random.randint(0, counts[i + 1], samples)
+        indices1 = np.random.randint(0, counts[i], samples)
+        querys0 = np.where(y == keys[i + 1])[0]
+        querys1 = np.where(y == keys[i])[0]
+        x0.extend(x[querys0][indices0][:, :len(x)])
+        x1.extend(x[querys1][indices1][:, :len(x)])
+        y_train.extend((keys[i + 1] - keys[i]) * np.ones(samples))
+
+    x0 = np.array(x0)
+    x1 = np.array(x1)
+    y_train = np.array([y_train]).transpose()
+
+    return x0, x1, y_train

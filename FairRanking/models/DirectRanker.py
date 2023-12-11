@@ -78,6 +78,7 @@ class DirectRanker(nn.Module):
 
     def forward(self, x0, x1):
         mm0 = self.forward_extracted_features(x0)
+        #print(mm0)
         mm1 = self.forward_extracted_features(x1)
         mm = self.calc_dist(mm0, mm1)
         mm = self.ranking_activation(self.ranking_layer(mm))
@@ -95,6 +96,6 @@ class DirectRanker(nn.Module):
         return x
     
     def calc_dist(self, mm0, mm1):
-        return (mm0 - mm1) / 2
+        return mm0 - mm1 #/ 2
 
         

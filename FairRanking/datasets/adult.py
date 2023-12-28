@@ -1,7 +1,7 @@
 from FairRanking.datasets.BaseDataset import BaseDataset, get_rand_chance
 import pandas as pd
 import numpy as np
-
+from sklearn.preprocessing import StandardScaler
 
 class Adult(BaseDataset):
 
@@ -25,6 +25,9 @@ class Adult(BaseDataset):
         self.df = pd.get_dummies(self.df, columns=self.one_hot_cols)
         # map labels into 0, 1
         self.df[14].replace(['<=50K', '>50K'], [0., 1.], inplace=True, regex=True)
+        scaler = StandardScaler()
+        scaled_numerical = scaler.fit_transform(self.df[self.numeric_cols])
+        self.df[self.numeric_cols] = scaled_numerical
         # split into x, y, s
         sensible_cols = ['9_ Female', '9_ Male']
         self.x_col = self.df[self.df.columns.difference(self.label_col + sensible_cols)]

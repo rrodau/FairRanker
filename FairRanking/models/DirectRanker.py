@@ -1,9 +1,5 @@
-import numpy as np
-
 import torch
-import torch.optim as optim
 import torch.nn as nn
-
 
 
 class DirectRanker(nn.Module):
@@ -33,18 +29,11 @@ class DirectRanker(nn.Module):
                  ranking_activation=nn.Tanh(),
                  feature_bias=True,
                  kernel_initializer=nn.init.normal_,
-                 learning_rate=0.01,
-                 max_steps=3000,
-                 learning_rate_step_size=500,
-                 learning_rate_decay_factor=0.944,
                  end_qids=20,
                  start_qids=10,
                  num_features=0,
-                 num_fair_classes=0,
                  random_seed=None,
                  name="DirectRanker",
-                 tensor_name_prefix="",
-                 sess=None
                  ):
         super().__init__()
         self.hidden_layers = hidden_layers
@@ -52,21 +41,16 @@ class DirectRanker(nn.Module):
         self.ranking_activation = ranking_activation
         self.feature_bias = feature_bias
         self.kernel_initializer = kernel_initializer
-        self.learning_rate = learning_rate
-        self.max_steps = max_steps
-        self.learning_rate_step_size = learning_rate_step_size
-        self.learning_rate_decay_factor = learning_rate_decay_factor
         self.end_qids = end_qids
         self.start_qids = start_qids
         self.random_seed = random_seed
         self.name = name
-        self.tensor_name_prefix = tensor_name_prefix
-        self.sess = sess
 
         self.layers = nn.ModuleList()
         prev_nodes = num_features
         for num_neurons in self.hidden_layers:
             layer = nn.Linear(prev_nodes, num_neurons, bias=self.feature_bias)
+            self.kernel_initializer(layer.weight)
             self.layers.append(layer)
             prev_nodes = num_neurons
         
@@ -75,27 +59,58 @@ class DirectRanker(nn.Module):
         self.ranking_layer_cls = nn.Linear(prev_nodes, 1, bias=False)
 
 
+    def forward(self, x0: torch.Tensor, x1: torch.Tensor) -> torch.Tensor:
+        """
+        The forward function of the DirectRanker computes the rank score for
+        the documents provided
 
-    def forward(self, x0, x1):
+        Parameters:
+        - x0 (torch.Tensor): A document which needs to be ranked in relation to another document x1
+        - x1 (torch.Tesnor): A document which needs to be ranked in relation to another document x0
+
+        Returns:
+        - torch.Tensor: Ranking score given to the paired documents. Values \in (0,-1] 
+                        mean the document x1 is ranked higher whereas values \in (0, 1]
+                        mean the document x0 is ranked higher.
+        """
+        # Extracted features from the first sample
         mm0 = self.forward_extracted_features(x0)
-        #print(mm0)
+        # Extracted features from the second sample
         mm1 = self.forward_extracted_features(x1)
+        # Subtract both extracted features
         mm = self.calc_dist(mm0, mm1)
+        # Pass difference through the ranking layer
         mm = self.ranking_activation(self.ranking_layer(mm))
-        #mm_cls = self.ranking_activation(self.ranking_layer_cls(mm0 / 2.))
         return mm
-    
-    """ def loss(self, mm, y0):
-        ranking_loss = (y0 - mm) ** 2
-        return torch.mean(ranking_loss)"""
 
 
-    def forward_extracted_features(self, x):
+    def forward_extracted_features(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Helper function for the forward pass. It passes the input into the layers for the
+        extracted feautres
+
+        Parameters:
+        - x (torch.Tensor): An input document which will be passed through the layers in the
+                            the network except the ranking layer
+        
+        Returns:
+        - torch.Tensor: The extracted features of the document
+        """
         for layer in self.layers:
             x = self.feature_activation(layer(x))
         return x
     
-    def calc_dist(self, mm0, mm1):
-        return mm0 - mm1 #/ 2
 
-        
+    def calc_dist(self, mm0: torch.Tensor, mm1: torch.Tensor) -> torch.Tensor:
+        """
+        A function which calculates the difference between two torch tensors
+        these tensors are the extracted features
+
+        Parameters:
+        mm0 (torch.Tensor): The extracted features of the first document
+        mm1 (torch.Tensor): The extracted features of the second document
+
+        Returns:
+        torch.Tensor: The difference between the two extracted features tensors
+        """
+        return mm0 - mm1 #/ 2

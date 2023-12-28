@@ -1,0 +1,19 @@
+# ignore run logs
+runs/*
+__pycache__
+.ipynb_checkpoints
+.DS_Store
+*.pyc
+
+# ignore test notebooks
+helperstest.ipynb
+DirectRankerTest.ipynb
+DirectRankerAdvTest.ipynb
+experimentDirectRankerAdv.ipynb
+tets.ipynb
+plot_results.ipynb
+initializiationTest.ipynb
+
+# ignore results
+test_results/*
+trained_model/*

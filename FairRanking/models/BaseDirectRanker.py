@@ -12,17 +12,7 @@ class BaseDirectRanker(nn.Module):
         :param ranking_activation: tf function for the ranking part of the net
         :param feature_bias: boolean value if the feature part should contain a bias
         :param kernel_initializer: tf kernel_initializer
-        :param start_batch_size: start value for increasing the sample size
-        :param end_batch_size: end value for increasing the sample size
-        :param learning_rate: learning rate for the optimizer
-        :param max_steps: total training steps
-        :param learning_rate_step_size: factor for increasing the learning rate
-        :param learning_rate_decay_factor: factor for increasing the learning rate
-        :param optimizer: tf optimizer object
         :param print_step: for which step the script should print out the cost for the current batch
-        :param end_qids: end value for increasing the query size
-        :param start_qids: start value for increasing the query size
-        :param gamma: value how important the fair loss is
     """
 
     def __init__(self,
@@ -31,19 +21,8 @@ class BaseDirectRanker(nn.Module):
                  ranking_activation=nn.Tanh,
                  feature_bias=True,
                  kernel_initializer=nn.init.normal_,
-                 start_batch_size=100,
-                 end_batch_size=500,
-                 learning_rate=0.01,
-                 max_steps=3000,
-                 learning_rate_step_size=500,
-                 learning_rate_decay_factor=0.944,
-                 optimizer=optim.Adam,
-                 print_step=0,
-                 start_qids=0,
-                 end_qids=10,
                  random_seed=42,
                  name="DirectRanker",
-                 gamma=1,
                  dataset=None,
                  noise_module=False,
                  noise_type='sigmoid_full',
@@ -61,17 +40,6 @@ class BaseDirectRanker(nn.Module):
         self.feature_bias = feature_bias
         self.dataset = dataset
         self.kernel_initializer = kernel_initializer
-        self.start_batch_size = start_batch_size
-        self.end_batch_size = end_batch_size
-        self.learning_rate = learning_rate
-        self.max_steps = max_steps
-        self.learning_rate_step_size = learning_rate_step_size
-        self.learning_rate_decay_factor = learning_rate_decay_factor
-        self.optimizer = optimizer
-        self.print_step = print_step
-        self.end_qids = end_qids
-        self.start_qids = start_qids
-        self.gamma = gamma
         self.noise_module = noise_module
         self.noise_type = noise_type
         self.whiteout = whiteout
@@ -199,7 +167,7 @@ class BaseDirectRanker(nn.Module):
             
         return in_noise 
         
-def build_pairs(x, y, samples):
+def build_pairs(x, y, s, samples):
     """
     :param x:
     :param y:
@@ -208,8 +176,10 @@ def build_pairs(x, y, samples):
     """
     x0 = []
     x1 = []
+    s0 = []
+    s1 = []
     y_train = []
-
+    np.random.seed(42)
     keys, counts = np.unique(y, return_counts=True)
     sort_ids = np.argsort(keys)
     keys = keys[sort_ids]
@@ -221,10 +191,15 @@ def build_pairs(x, y, samples):
         querys1 = np.where(y == keys[i])[0]
         x0.extend(x[querys0][indices0][:, :len(x)])
         x1.extend(x[querys1][indices1][:, :len(x)])
+        s0.extend(s[querys0][indices0][:, :len(x)])
+        s1.extend(s[querys1][indices1][:, :len(x)])
+
         y_train.extend((keys[i + 1] - keys[i]) * np.ones(samples))
 
-    x0 = np.array(x0)
-    x1 = np.array(x1)
-    y_train = np.array([y_train]).transpose()
+    x0 = torch.tensor(x0, dtype=torch.float32)
+    x1 = torch.tensor(x1, dtype=torch.float32)
+    s0 = torch.tensor(s0, dtype=torch.float32)
+    s1 = torch.tensor(s1, dtype=torch.float32)
+    y_train = torch.tensor(np.array([y_train]).transpose(), dtype=torch.float32)
 
-    return x0, x1, y_train
+    return x0, x1, s0, s1, y_train

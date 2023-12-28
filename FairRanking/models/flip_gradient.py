@@ -1,15 +1,16 @@
-import torch
+from torch import nn
 from torch.autograd import Function
 
-class FlipGradientFunction(Function):
+class GradientReversalLayer(Function):
+    
     @staticmethod
-    def forward(ctx, x, lambda_):
-        ctx.lambda_ = lambda_
+    def forward(ctx, x):
         return x.view_as(x)
 
     @staticmethod
     def backward(ctx, grad_output):
-        return grad_output.neg() * ctx.lambda_, None
+        return -grad_output
 
-def flipGradient(x, lambda_=1.0):
-    return FlipGradientFunction.apply(x, lambda_)
+
+def gradient_reversal_layer(x):
+    return GradientReversalLayer.apply(x)

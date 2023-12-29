@@ -64,7 +64,7 @@ class DirectRankerAdv(BaseDirectRanker):
             self.kernel_initializer(layer.weight)
             self.debias_layers.append(layer)
             prev_neurons = num_neurons
-
+        self.debias_layers.append(nn.Linear(prev_neurons, 2))
         # Ranking Layers
         # Output from the Feature Layers goes into the Ranking Layer 
         self.ranking_layer = nn.Linear(prev_neurons_extracted, 1, bias=False)
@@ -103,7 +103,7 @@ class DirectRankerAdv(BaseDirectRanker):
         return nn_ranking
     
 
-    def forward_2(self, x0: torch.Tensor, x1: torch.Tensor) -> (torch.Tesnor, torch.Tesnor):
+    def forward_2(self, x0: torch.Tensor, x1: torch.Tensor) -> (torch.Tensor, torch.Tensor):
         """
         The second forward function which is used for the adversarial network which tries to predict
         the sensible attribute. It reverses the Gradient into the Main Network during backpropagation
@@ -127,8 +127,8 @@ class DirectRankerAdv(BaseDirectRanker):
         in_1 = self.forward_extracted_features(in_1)
 
         # Apply gradient reversal for bias handling
-        in_0 = gradient_reversal_layer(in_0)
-        in_1 = gradient_reversal_layer(in_1)
+        #in_0 = gradient_reversal_layer(in_0)
+        #in_1 = gradient_reversal_layer(in_1)
 
         # Process through the Debias Layers which predict the sensible attribute
         nn_pred_sensitive_0 = self.forward_debias_layers(in_0)
@@ -154,7 +154,7 @@ class DirectRankerAdv(BaseDirectRanker):
         return x
 
     
-    def forward_debias_layers(self, x):
+    def forward_debias_layers(self, x: torch.Tensor) -> torch.Tensor:
         """
         Helper function for the second forward pass. It passes the input into the layers for the
         predicted sensible attributes
@@ -166,13 +166,12 @@ class DirectRankerAdv(BaseDirectRanker):
         Returns:
         - torch.Tensor: The prediction of the sensible attribute
         """
-        for layer in self.debias_layers:
+        for layer in self.debias_layers[:-1]:
             x = self.feature_activation(layer(x))
-        x = nn.functional.softmax(x) #TODO: is it better with softmax?
-        return x
+        return self.debias_layers[-1](x)
     
 
-    def forward_ranking_acitvation(self, x, reuse=False):
+    def forward_ranking_acitvation(self, x: torch.Tensor, reuse=False) -> torch.Tensor:
         """
         Helper function for the ranking output. It passes the extracted features
         into a ranking activation

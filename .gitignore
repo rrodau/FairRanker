@@ -9,11 +9,9 @@ __pycache__
 helperstest.ipynb
 DirectRankerTest.ipynb
 DirectRankerAdvTest.ipynb
-experimentDirectRankerAdv.ipynb
+SandboxDirectRankerAdv.ipynb
 tets.ipynb
 plot_results.ipynb
 initializiationTest.ipynb
 
-# ignore results
-test_results/*
-trained_model/*
+# ignore models

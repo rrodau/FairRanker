@@ -1,10 +1,12 @@
 Schedules with values 1-7, so 9 runs in total
 Hidden Layers: [64, 32, 16]
-Debias Layers: [128, 64, 32, 16]
+Debias Layers: [64, 32, 16]
 Lr Adv: 0.1
-Lr Main: 0.001
+Lr Main: 0.01
 threshold: 0.4
 Weight Initalization: normal
 Optimizer: Adam
 Batchtraining: False
-Scheduler: 0.994 Decay 500 steps
+FeedDict: True
+Scheduler: No decay
+random seed: 42

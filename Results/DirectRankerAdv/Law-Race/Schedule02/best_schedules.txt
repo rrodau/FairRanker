@@ -1,0 +1,10 @@
+nDCG mean: 0.8037836734693878
+1-rND mean: 0.744426530612245
+The best Schedules are:
+	[1; 3] with an nDCG of 0.9161 and a 1-rND of 0.7507
+	[2; 5] with an nDCG of 0.8558 and a 1-rND of 0.745
+	[3; 5] with an nDCG of 0.8212 and a 1-rND of 0.7464999999999999
+	[1; 6] with an nDCG of 0.8424 and a 1-rND of 0.8447
+	[2; 6] with an nDCG of 0.8258 and a 1-rND of 0.7652
+	[7; 6] with an nDCG of 0.8079 and a 1-rND of 0.7563
+	[6; 7] with an nDCG of 0.8142 and a 1-rND of 0.7509

@@ -4,7 +4,7 @@ import torch
 import torch.optim as optim
 import torch.nn as nn
 from FairRanking.models.BaseDirectRanker import BaseDirectRanker
-from FairRanking.models.flip_gradient import flipGradient
+from FairRanking.models.flip_gradient import CustomLayer
 
 
 class DebiasClassifier(BaseDirectRanker):
@@ -18,8 +18,11 @@ class DebiasClassifier(BaseDirectRanker):
                  kernel_initializer=nn.init.normal_,
                  random_seed=42,
                  dataset=None,
+                 start_batch_size=100,
+                 end_batch_size=500,
+                 end_qids=300,
+                 start_qids=10,
                  name="DebiasClassifier",
-                 gamma=1,
                  noise_module=False,
                  noise_type="sigmoid_full",
                  whiteout=False,
@@ -33,7 +36,8 @@ class DebiasClassifier(BaseDirectRanker):
         super().__init__(hidden_layers=hidden_layers,
                          feature_activation=feature_activation, ranking_activation=ranking_activation,
                          feature_bias=feature_bias, kernel_initializer=kernel_initializer,
-                         random_seed=random_seed, name=name, gamma=gamma,
+                         random_seed=random_seed, start_batch_size=start_batch_size,
+                         end_batch_size=end_batch_size, start_qids=start_qids, end_qids=end_qids, name=name,
                          noise_module=noise_module, noise_type=noise_type, whiteout=whiteout,
                          uniform_noise=uniform_noise,
                          whiteout_gamma=whiteout_gamma, whiteout_lambda=whiteout_lambda, num_features=num_features,
@@ -67,14 +71,17 @@ class DebiasClassifier(BaseDirectRanker):
             layer = nn.Linear(prev_neurons, num_neurons)
             self.kernel_initializer(layer.weight)
             self.additional_main_layers.append(layer)
+            prev_neurons = num_neurons
         
         # output of the relevance classes in the main network for classification
         self.output_layer = nn.Linear(prev_neurons, self.num_relevance_classes)
+ 
+        self.flip_gradient = CustomLayer()
 
-    
+
     def forward_extracted_features(self, x):
         """
-        Helper function for the forward pass. It passes the input into the layers for the
+        Helper function for the forward pass. It passes the input into the hidden layers to get the
         extracted feautres
 
         Parameters:
@@ -91,8 +98,8 @@ class DebiasClassifier(BaseDirectRanker):
 
     def forward_nn(self, x):
         """
-        Helper function for the forward pass. It passes the extracted features
-        into the last layers and the into the output layers
+        Helper function for the forward pass. It passes input through the main
+        network
 
         Parameters:
         - x (torch.Tensor): An input document which will be passed through the last
@@ -110,8 +117,8 @@ class DebiasClassifier(BaseDirectRanker):
 
     def forward_debias(self, x):
         """
-        Helper function for the forward pass of the bias layer. 
-        It passes the extracted features into the debias layers
+        A function which passes the input through the hidden layers to get the
+        extracted features and then pass these through the debias layers
 
         Parameters:
         - x (torch.Tensor): An input document which will be passed through the layers in the
@@ -121,7 +128,38 @@ class DebiasClassifier(BaseDirectRanker):
         - torch.Tensor: The logits for classification of the sensible attribute
         """
         x = self.forward_extracted_features(x)
-        # here is the gradient flip
+        x = self.flip_gradient(x)
         for layer in self.debias_layers:
             x = self.feature_activation(layer(x))
         return x
+
+
+    def predict_proba(self, x):
+        x = self.forward_nn(x)
+        return nn.Softmax(dim=1)(x)
+    
+
+    def predict(self, x):
+        x = self.forward_nn(x)
+        return torch.argmax(x, dim=1)
+    
+    
+    def get_feed_dict(self, x, y, y_bias, samples):
+        idx = torch.randperm(len(x))[:samples]
+        x_batch = x[idx]
+        y_batch = one_hot_convert(y[idx], self.num_relevance_classes)
+        y_bias_batch = y_bias[idx]
+        return {'x': x_batch, 'y': y_batch, 's': y_bias_batch}
+
+
+def one_hot_convert2(y, num_classes):
+    y_one_hot = torch.zeros((y.size(0), num_classes), dtype=torch.float32)
+    y_one_hot.scatter_(1, y.unsqueeze(1).long() - 1, 1)
+    return y_one_hot
+
+def one_hot_convert(y, num_classes):
+    y.detach().numpy()
+    arr = np.zeros((len(y), num_classes))
+    for i, yi in enumerate(y):
+        arr[i, int(yi) - 1] = 1
+    return torch.tensor(arr, dtype=torch.float32)

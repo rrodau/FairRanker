@@ -3,11 +3,12 @@ import numpy as np
 import torch
 import itertools
 from sklearn.metrics import roc_auc_score
+from sklearn.preprocessing import label_binarize
 
 
 DATASET_LIST = ['compas', 'w3c', 'crime', 'german', 'trec', 'adult', 'synth', 'law-gender', 'law-race']
 
-def disparate_impact(prediction, s0, s1):
+def disparate_impact(prediction, s0, s1=None):
     """
     specifficaly made for adult dataset
     """
@@ -39,7 +40,44 @@ def disparate_impact(prediction, s0, s1):
     return di_score.item()
 
 
-def nDCG_cls(model, X0, X1, y, at=10, trec=False, reverse=True, k=1, m=1, esti=True):
+def nDCG_cls(prediction, y, at=10, trec=False, reverse=True, k=1, m=1, esti=True):
+    """
+    Calculates the ndcg for a given estimator
+    """
+    prediction = prediction.detach().numpy()
+    y = y.detach().numpy()
+    if len(prediction[0]) > 1:
+        prediction = np.max(prediction, axis=1)
+    rand = np.random.random(prediction.shape)
+    sorted_list = [yi for _, _, yi in sorted(zip(prediction, rand, y), reverse=reverse)]
+    yref = sorted(y, reverse=reverse)
+    if trec:
+        DCG = 0.
+        IDCG = 0.
+        max_value = max(sorted_list)
+        max_idx = len(sorted_list) - 1
+        for i in range(at):
+            exp_dcg = sorted_list[i] + at - max_value
+            exp_idcg = yref[i] + at - max_value
+            if exp_dcg < 0:
+                exp_dcg = 0
+            if exp_idcg < 0:
+                exp_idcg = 0
+            DCG += (2 ** exp_dcg / (k / m) - 1) / np.log2(i + 2)
+            IDCG += (2 ** exp_idcg - 1) / np.log2(i + 2)
+        nDCG = DCG / IDCG
+        return nDCG
+    else:
+        DCG = 0.
+        IDCG = 0.
+        for i in range(min(at, len(sorted_list))):
+            DCG += (2 ** sorted_list[i] - 1) / np.log2(i + 2)
+            IDCG += (2 ** yref[i] - 1) / np.log2(i + 2)
+        nDCG = DCG / IDCG
+        return float(nDCG)
+    
+
+def nDCG_cls_no_model(predictions, y, at=10, trec=False, reverse=True, k=1, m=1, esti=True):
     """
     Calculates the normalized Discounted Cumulative Gain (nDCG) for a given PyTorch model.
 
@@ -48,7 +86,6 @@ def nDCG_cls(model, X0, X1, y, at=10, trec=False, reverse=True, k=1, m=1, esti=T
     includes an option to handle multi-dimensional outputs.
 
     Parameters:
-    - model: A PyTorch model that outputs rankings or scores.
     - X: The input tensor for the model, typically feature data.
     - y: The true relevance scores as a tensor, used as a reference for calculating the ideal ranking.
     - at (int, optional): The number of top items to consider in the nDCG calculation. Defaults to 10.
@@ -62,50 +99,98 @@ def nDCG_cls(model, X0, X1, y, at=10, trec=False, reverse=True, k=1, m=1, esti=T
     Returns:
     - float: The calculated nDCG score.
     """
-
-    model.eval()
-    with torch.no_grad():
-        predictions = model(X0, X1)
-        if esti:
+    if esti:
+        if predictions.shape[1] == 1:
             predictions = torch.sign(predictions).int()
-        if len(predictions.size()) > 1 and predictions.size(1) > 1:
-            predictions = torch.max(predictions, dim=1).values
-
-        rand = torch.rand(predictions.shape)
-        #_, sorted_indices = torch.sort(torch.stack((predictions, rand), dim=1), dim=0, descending=reverse)
-        _, sorted_indices = torch.sort(predictions, dim=0, descending=reverse)
-        sorted_list = predictions[sorted_indices].tolist()
-        yref = sorted(y.tolist(), reverse=reverse)
-        if trec:
-            DCG = torch.zeros(1)
-            IDCG = torch.zeros(1)
-            max_value = max(sorted_list)
-            for i in range(at):
-                exp_dcg = sorted_list[i] + at - max_value
-                exp_idcg = yref[i] + at - max_value
-                exp_dcg = max(exp_dcg, 0)
-                exp_idcg = max(exp_idcg, 0)
-                DCG += (2 ** exp_dcg / (k / m) - 1) / torch.log2(torch.tensor(i + 2))
-                IDCG += (2 ** exp_idcg - 1) / torch.log2(torch.tensor(i + 2))
-            nDCG = (DCG / IDCG).item() if IDCG != 0 else 0
-            return nDCG 
+            print(predictions)
         else:
-            DCG = 0
-            IDCG = 0
-            for i in range(min(at, len(sorted_list))):
-                DCG += (2 ** sorted_list[i][0][0] - 1) / np.log2(i + 2)
-                IDCG += (2 ** yref[i][0] - 1) / np.log2(i + 2)
-            nDCG = DCG / IDCG
-            return float(nDCG)
-    
+            predictions = torch.argmax(predictions, dim=1)
+    if len(predictions.shape) > 1:
+        predictions = predictions.squeeze()
 
-def auc_estimator(prediction, y):
+    rand = torch.rand(predictions.shape)
+    if len(y.shape) > 1:
+        y = y.squeeze()
+    stacked = torch.stack((predictions, rand, y), dim=1)
+    sorted_indices = torch.argsort(stacked[:, 0], descending=True)  # Sort by prediction
+    sorted_list = stacked[sorted_indices][:,2]
+    #print(sorted_list[:,2])
+    # Extract the sorted y values
+    yref = sorted(y.tolist(), reverse=reverse)
+    if trec:
+        DCG = 0
+        IDCG = 0
+        max_value = max(sorted_list)
+        print(max_value)
+        for i in range(at):
+            exp_dcg = sorted_list[i] + at - max_value
+            exp_idcg = yref[i] + at - max_value
+            exp_dcg = max(exp_dcg, 0)
+            exp_idcg = max(exp_idcg, 0)
+            DCG += (2 ** exp_dcg / (k / m) - 1) / np.log2(i + 2)
+            IDCG += (2 ** exp_idcg - 1) / np.log2(i + 2)
+        nDCG = (DCG / IDCG) if IDCG != 0 else 0
+        return float(nDCG) 
+    else:
+        DCG = 0
+        IDCG = 0
+        for i in range(min(at, len(sorted_list))):
+            DCG += (2 ** sorted_list[i] - 1) / np.log2(i + 2)
+            IDCG += (2 ** yref[i] - 1) / np.log2(i + 2)
+        nDCG = DCG / IDCG
+        return float(nDCG)
+
+
+def auc_estimator2(prediction, y):
     """
     Calculates the auc by using the sklearn roc_auc_score function
     """
-    prediction = np.array(prediction.detach()).tolist()
-    y = y.tolist()
-    return roc_auc_score(y, prediction)
+    prediction = prediction.detach().numpy()
+    y = y.numpy()
+    if prediction.shape[1] == 1 and len(np.unique(y)) <= 2:
+        auc = roc_auc_score(y, prediction)
+    else:
+        # binarize y 
+        y_binary = label_binarize(y, classes=np.unique(y))
+        auc = roc_auc_score(y_binary, prediction, multi_class='ovr')
+    return auc
+
+
+def auc_estimator(prediction, y):
+    '''
+    Compute Area Under the Receiver Operating Characteristic Curve (ROC AUC) from prediction scores.
+    '''
+    # TODO multiclass at the moment not right! So this is only valid for the wiki dataset
+    if len(prediction.shape) > 1:
+        prediction = prediction.squeeze()
+    rand = np.random.random(prediction.shape)
+    if len(y.shape) > 1:
+        y = y.squeeze()
+    _, sorted_indices = torch.sort(y, dim=0, descending=True)
+    yref = y[sorted_indices]
+    y = y.numpy()
+    real_class = [yi for _, _, yi in sorted(zip(prediction, rand, y), reverse=True)]
+    TP, FP = [0.], [0.]
+    for idx, c in enumerate(real_class):
+        if c == yref[idx]:
+            TP.append(TP[-1] + 1)
+            FP.append(FP[-1])
+        else:
+            TP.append(TP[-1])
+            FP.append(FP[-1] + 1)
+    TP.append(1. if TP[-1] == 0 else TP[-1])
+    FP.append(1. if FP[-1] == 0 else FP[-1])
+    TP, FP = np.array(TP), np.array(FP)
+    TP = TP / TP[-1] * 100
+    FP = FP / FP[-1] * 100
+
+    # Calculate AUC
+    AUC = 0.
+    for i in range(len(TP) - 1):
+        AUC += TP[i] * (FP[i + 1] - FP[i])
+    AUC /= 10000
+
+    return AUC
 
 
 def group_pairwise_accuracy(predictions, y, y_bias):
@@ -126,7 +211,7 @@ def group_pairwise_accuracy(predictions, y, y_bias):
     """
 
 
-    scores = predictions.numpy()
+    scores = predictions.detach().numpy()
 
     if len(scores[0]) > 1:
         scores = np.max(scores, axis=1)
@@ -227,18 +312,6 @@ def acc_fair_model(estimator, X_test, y_test, y_bias_test,
     raise NotImplementedError
 
 
-def rND_estimator(estimator, X, s, step=10, start=10,
-                  protected_group_idx=1, non_proteceted_group_idx=0,
-                  y=None, esti=True):
-    '''
-    Computes the normalized Discounted Difference, which is a measure of how different are
-    the proportion of members in the protected group at the top-i cutoff and in the overall
-    population. Lower is better. 0 is the best possible value. Only binary protected groups
-    are supported.
-    '''
-    raise NotImplementedError
-
-
 def rnd_model_base_pytorch(model, x_test, y_test, y_bias_test, at=500, queries=False):
     """
     Calculates the rnd for the model output on the sensible attribute using PyTorch
@@ -287,10 +360,13 @@ def rND_torch(prediction, s, step=10, start=10, protected_group_idx=1, non_prote
     if len(prediction) != len(s):
         raise AssertionError(f'len of prediction {len(prediction)} and s {len(s)} are unequal')
 
+    if len(prediction.shape) > 1:
+        prediction = prediction.squeeze()
+
     # Count occurrences of each group
     unique, counts = torch.unique(s, return_counts=True, sorted=True)
     count_dict_all = {k.item(): v.item() for k, v in zip(unique, counts)}
-    #print(f"before sorting: {torch.unique(s, return_counts=True)}")
+
     # Ensure both groups are represented
     keys = [protected_group_idx, non_protected_group_idx]
     for key in keys:
@@ -298,20 +374,19 @@ def rND_torch(prediction, s, step=10, start=10, protected_group_idx=1, non_prote
             count_dict_all[key] = 0
 
     # Sort predictions and corresponding group labels
-    sorted_indices = torch.argsort(prediction, descending=True, dim=0)
+    sorted_indices = torch.argsort(prediction, descending=True, dim=0, stable=True)
     sorted_s = s[sorted_indices]
-    #print(f"after sorting: {torch.unique(sorted_s, return_counts=True)}")
 
     # Create 'worst-case' sorted lists for regularization
     # first only the non protected group
     fake_horrible_s = torch.cat((torch.full((count_dict_all[non_protected_group_idx],), non_protected_group_idx),
-                                 torch.full((count_dict_all[protected_group_idx],), protected_group_idx)), dim=0)
+                                 torch.full((count_dict_all[protected_group_idx],), protected_group_idx)), dim=0).flatten()
 
     # first only the protected group
     fake_horrible_s_2 = torch.cat((torch.full((count_dict_all[protected_group_idx],), protected_group_idx),
-                                   torch.full((count_dict_all[non_protected_group_idx],), non_protected_group_idx)), dim=0)
+                                   torch.full((count_dict_all[non_protected_group_idx],), non_protected_group_idx)), dim=0).flatten()
 
-    rnd, max_rnd, max_rnd_2 = 0.0, 0.0, 0.0
+    rnd, max_rnd, max_rnd_2 = 0, 0, 0
 
     for i in range(start, len(s), step):
         # Count occurrences in top i of the sorted list
@@ -332,13 +407,12 @@ def rND_torch(prediction, s, step=10, start=10, protected_group_idx=1, non_prote
             if key not in count_dict_reg_2:
                 count_dict_reg_2[key] = 0
 
-        #print(count_dict_top_i)
         # Update rnd and max_rnd
-        rnd += 1 / np.log2(i) * abs(
+        rnd += 1 / np.log2(i) * np.abs(
             count_dict_top_i[protected_group_idx] / i - count_dict_all[protected_group_idx] / len(s))
-        max_rnd += 1 / np.log2(i) * abs(
+        max_rnd += 1 / np.log2(i) * np.abs(
             count_dict_reg[protected_group_idx] / i - count_dict_all[protected_group_idx] / len(s))
-        max_rnd_2 += 1 / np.log2(i) * abs(
+        max_rnd_2 += 1 / np.log2(i) * np.abs(
             count_dict_reg_2[protected_group_idx] / i - count_dict_all[protected_group_idx] / len(s))
 
     max_rnd = max(max_rnd, max_rnd_2)
@@ -347,7 +421,11 @@ def rND_torch(prediction, s, step=10, start=10, protected_group_idx=1, non_prote
 
 
 def calc_accuracy(outputs, labels):
-    pred = torch.sign(outputs).int()
+    print(outputs.shape)
+    if outputs.shape[1] > 1:
+        pred = torch.argmax(outputs, dim=1)
+    else:
+        pred = torch.sign(outputs).int()
     correct_predictions = (pred == labels).int()
     accuracy = correct_predictions.sum() / len(labels)
     return accuracy
@@ -355,11 +433,17 @@ def calc_accuracy(outputs, labels):
 
 def calc_sens_loss(sensitive0, sensitive1, s_true0, s_true1, gamma=1.0):
     loss = 0
-    eps = 1e-10
-    loss += -s_true0[:,0] * torch.log2(sensitive0[:,0] + eps) - (1 - s_true0[:,1]) * torch.log2(1 - sensitive0[:,1] + eps)
-    loss += -s_true1[:,0] * torch.log2(sensitive1[:,0] + eps) - (1 - s_true1[:,1]) * torch.log2(1 - sensitive1[:,1] + eps)
+    eps = 1e-6
+    sensitive0 = torch.sign(sensitive0).int() # for feed dict
+    sensitive1 = torch.sign(sensitive1).int()
+    #loss += -s_true0 * torch.log2(sensitive0 + eps) - (1 - s_true0) * torch.log2(1 - sensitive0 + eps)
+    #loss += -s_true1 * torch.log2(sensitive1 + eps) - (1 - s_true1) * torch.log2(1 - sensitive1 + eps)
+    loss += -s_true0 * torch.log2(sensitive0 + eps) - (1 - s_true0) * torch.log2(1 - sensitive0 + eps)
+    loss += -s_true1 * torch.log2(sensitive1 + eps) - (1 - s_true1) * torch.log2(1 - sensitive1 + eps)
     #print(loss)
+    print(loss)
     loss = torch.sum(loss, dim=0)
+    print(loss)
     return gamma * torch.mean(loss)
 
 
@@ -423,7 +507,7 @@ def transform_pairwise(X, y, s=None, subsample=0.):
 
 
 def calc_rnd(model, X0, X1, s0, s1):
-    zero_documents = torch.zeros(size=(X0.shape[0]+X1.shape[0], X0.shape[1]))
+    #zero_documents = torch.zeros(size=(X0.shape[0]+X1.shape[0], X0.shape[1]))
     X_test_combined = torch.cat((X0, X1), dim=0)
     shuffled = X_test_combined[torch.randperm(X_test_combined.size(0))]
     s_test_combined = torch.cat((s0, s1), dim=0)

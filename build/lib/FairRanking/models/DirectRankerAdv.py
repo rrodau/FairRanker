@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 from FairRanking.models.BaseDirectRanker import BaseDirectRanker
-from FairRanking.models.flip_gradient import gradient_reversal_layer
+from FairRanking.models.flip_gradient import gradient_reversal_layer, CustomLayer
 
 class DirectRankerAdv(BaseDirectRanker):
     """
@@ -32,8 +32,9 @@ class DirectRankerAdv(BaseDirectRanker):
                  whiteout_gamma=1,
                  whiteout_lambda=1,
                  num_features=0,
-                 num_fair_classes=0,
-                 save_dir=None):
+                 num_fair_classes=2,
+                 save_dir=None,
+                 num_classes=0):
         super().__init__(hidden_layers=hidden_layers, dataset=dataset,
                     feature_activation=feature_activation, ranking_activation=ranking_activation,
                     feature_bias=feature_bias, kernel_initializer=kernel_initializer,
@@ -42,7 +43,8 @@ class DirectRankerAdv(BaseDirectRanker):
                     whiteout_gamma=whiteout_gamma, whiteout_lambda=whiteout_lambda, 
                     num_features=num_features,
                     num_fair_classes=num_fair_classes, save_dir=save_dir)
-        
+        if random_seed:
+            torch.manual_seed(random_seed)
         # Feature Layers
         self.feature_layers = nn.ModuleList()
         prev_neurons_extracted = num_features
@@ -53,7 +55,11 @@ class DirectRankerAdv(BaseDirectRanker):
             self.kernel_initializer(layer.weight)
             self.feature_layers.append(layer)
             prev_neurons_extracted = num_neurons
+        # Test for law
+        #self.feature_layers.append(nn.Linear(prev_neurons_extracted, num_classes))
         prev_neurons = prev_neurons_extracted
+        #prev_neurons = num_classes
+        #prev_neurons_extracted = num_classes
 
         # Debias Layers
         self.debias_layers = nn.ModuleList()
@@ -64,13 +70,13 @@ class DirectRankerAdv(BaseDirectRanker):
             self.kernel_initializer(layer.weight)
             self.debias_layers.append(layer)
             prev_neurons = num_neurons
-        self.debias_layers.append(nn.Linear(prev_neurons, 2))
+        self.debias_layers.append(nn.Linear(prev_neurons, self.num_fair_classes))# 1 for feed_dict
         # Ranking Layers
         # Output from the Feature Layers goes into the Ranking Layer 
-        self.ranking_layer = nn.Linear(prev_neurons_extracted, 1, bias=False)
+        self.ranking_layer = nn.Linear(prev_neurons_extracted, 1, bias=False)  
+        self.flip_gradient = CustomLayer()
         
 
-#TODO: Do I realy need to recompute the extracted featres in the bias forward pass?
     def forward(self, x0: torch.Tensor, x1: torch.Tensor) -> torch.Tensor:
         """
         The main forward function of the DirectRankerAdv computes the rank score for
@@ -97,7 +103,7 @@ class DirectRankerAdv(BaseDirectRanker):
         in_1 = self.forward_extracted_features(in_1)
 
         # Process through Ranking Layers
-        nn_ranking = in_0 - in_1
+        nn_ranking = (in_0 - in_1) / 2
         nn_ranking = self.forward_ranking_acitvation(nn_ranking)
 
         return nn_ranking
@@ -127,8 +133,8 @@ class DirectRankerAdv(BaseDirectRanker):
         in_1 = self.forward_extracted_features(in_1)
 
         # Apply gradient reversal for bias handling
-        #in_0 = gradient_reversal_layer(in_0)
-        #in_1 = gradient_reversal_layer(in_1)
+        in_0 = self.flip_gradient(in_0)
+        in_1 = self.flip_gradient(in_1)
 
         # Process through the Debias Layers which predict the sensible attribute
         nn_pred_sensitive_0 = self.forward_debias_layers(in_0)
@@ -186,7 +192,33 @@ class DirectRankerAdv(BaseDirectRanker):
                         mean the document x0 is ranked higher.
         """
         return self.ranking_activation(self.ranking_layer(x))
-        
+        #return self.ranking_layer(x)
+    
+
+    def predict_proba(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.forward_extracted_features(x)
+        res = self.ranking_activation(self.ranking_layer(x / 2.))
+        return 0.5 * (1 + res)
+        #return nn.Softmax(dim=0)(x)
+
+
+    def predict(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.forward_extracted_features(x)
+        res =  self.ranking_activation(self.ranking_layer(x / 2.))
+        return (res > 0).int()
+
+
+    def get_feed_dict(self, x, y, y_bias, samples):
+        #TODO: Comment
+        pairs_dict = super().get_feed_dict(x, y, y_bias, samples)
+
+        return pairs_dict
+
+
+    def get_feed_dict_queries(self, x, y, y_bias, samples, around=30):
+        pairs_dict = super().get_feed_dict_queries(x, y, y_bias, samples)
+
+        return pairs_dict
 
     @staticmethod
     def save(estimator, path):

@@ -7,7 +7,9 @@ FairRanking.egg-info/PKG-INFO
 FairRanking.egg-info/SOURCES.txt
 FairRanking.egg-info/dependency_links.txt
 FairRanking.egg-info/top_level.txt
+FairRanking/TrainingFunctions/DebiasClassifierTrain.py
 FairRanking/TrainingFunctions/DirectRankerAdvTrain.py
+FairRanking/TrainingFunctions/DirectRankerTrain.py
 FairRanking/datasets/BaseDataset.py
 FairRanking/datasets/adult.py
 FairRanking/datasets/compas.py

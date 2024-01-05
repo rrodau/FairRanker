@@ -21,6 +21,10 @@ class BaseDirectRanker(nn.Module):
                  feature_bias=True,
                  kernel_initializer=nn.init.normal_,
                  random_seed=42,
+                 start_batch_size=100,
+                 end_batch_size=500,
+                 end_qids=300,
+                 start_qids=10,
                  name="DirectRanker",
                  dataset=None,
                  noise_module=False,
@@ -38,6 +42,10 @@ class BaseDirectRanker(nn.Module):
         self.ranking_activation = ranking_activation
         self.feature_bias = feature_bias
         self.dataset = dataset
+        self.start_batch_size = start_batch_size
+        self.end_batch_size = end_batch_size
+        self.start_qids = start_qids
+        self.end_qids = end_qids
         self.kernel_initializer = kernel_initializer
         self.noise_module = noise_module
         self.noise_type = noise_type
@@ -160,6 +168,99 @@ class BaseDirectRanker(nn.Module):
         return in_noise 
 
 
+    def get_feed_dict(self, x, y, y_bias, samples):
+        # TODO: Optimize
+        """
+        Prepares a dictionary for training with pairs of data points from adjacent classes.
+
+        Arguments:
+        x (torch.Tensor): Input features.
+        y (torch.Tensor): Target labels.
+        y_bias (torch.Tensor): Bias labels.
+        samples (int): Number of samples to draw from each class.
+
+        Returns:
+        dict: A dictionary containing pairs of data points, training labels, bias labels, and an adjustment term for loss.
+        """
+        x0, x1, y_train, y0_bias, y1_bias, y_bias_train = [], [], [], [], [], []
+
+        keys, counts = torch.unique(y, return_counts=True)
+        # go through each unique class
+        for i in range(len(keys) - 1):
+            # random indices for current and next class
+            indices0 = torch.randint(0, counts[i + 1], (samples,))
+            indices1 = torch.randint(0, counts[i], (samples,))
+
+            # get the indices where y equals the current and next class
+            querys0 = torch.where(y == keys[i + 1])[0]
+            querys1 = torch.where(y == keys[i])[0]
+
+            # Append pairs of data, labels and bias labels
+            # Isn't there a possible IndexOutOfBounds Error?
+            x0.append(x[querys0][indices0])
+            x1.append(x[querys1][indices1])
+            y_train.append((keys[i + 1] - keys[i]).repeat(samples))
+            y0_bias.append(y_bias[querys0][indices0])
+            y1_bias.append(y_bias[querys1][indices1])
+            y_bias_train.append((y_bias[querys0][indices0] - y_bias[querys1][indices1]).squeeze())
+
+        # Concatenate lists into tensors
+        x0 = torch.cat(x0)
+        x1 = torch.cat(x1)
+        y_train = torch.cat(y_train).unsqueeze(1)
+        y0_bias = torch.cat(y0_bias)
+        y1_bias = torch.cat(y1_bias)
+        y_bias_train = torch.cat(y_bias_train).unsqueeze(1)
+
+        # Calculate an adjustment term for symmetric loss
+        y_bias_counts = torch.unique(y_bias_train, return_counts=True)[1]
+        num_nonzeros = y_bias_counts[1] if len(y_bias_counts) > 1 else 1
+        adj_sym_loss_term = len(x0) / num_nonzeros
+
+        return {'x0': x0, 'x1': x1, 'y_train': y_train,
+                'y_bias_0': y0_bias, 'y_bias_1': y1_bias,
+                'y_bias': y_bias_train, 'adj_loss_term': adj_sym_loss_term}
+    
+
+    def get_feed_dict_queries(self, x, y, y_bias, samples, around=30):
+        """
+        :param current_batch:
+        :param around:
+        """
+        x0 = []
+        x1 = []
+        y_train = []
+        y0_bias = []
+        y1_bias = []
+
+        keys, counts = torch.unique(y, return_counts=True, sorted=True)
+        indices0 = torch.randint(0, len(keys), (samples,))
+        diff_indices1 = torch.randint(-around, around, (samples,))
+        indices1 = []
+        for j in range(len(indices0)):
+            if diff_indices1[j] == 0:
+                diff_indices1[j] = 1
+            tmp_idx = (indices0[j] + diff_indices1[j]) % len(keys)
+            if tmp_idx > indices0[j]:
+                indices1.append(indices0[j])
+                indices0[j] = tmp_idx
+            else:
+                indices1.append(tmp_idx)
+            assert indices0[j] >= indices1[j]
+        x0 = x[indices0]
+        x1 = x[indices1]
+        print(len(x0[0]))
+
+        y_train.extend(1 * np.ones(samples))
+        y_train = torch.tensor(y_train, dtype=torch.float32).unsqueeze(1)
+
+        y0_bias = y_bias[indices0]
+        y1_bias = y_bias[indices1]
+
+        return {'x0': x0, 'x1': x1, 'y_train': y_train,
+                'y_bias_0': y0_bias, 'y_bias_1': y1_bias}
+
+
 def build_pairs1(x, y, s, samples_per_pair):
     x0 = []
     x1 = []
@@ -171,8 +272,10 @@ def build_pairs1(x, y, s, samples_per_pair):
     sort_ids = np.argsort(keys)
     keys = keys[sort_ids]
     counts = counts[sort_ids]
-    first_keys = np.random.choice(keys, len(keys)//2) if len(keys) > 4 else list(len(keys)) 
-    second_keys = np.random.choice(keys, len(keys)//2) if len(keys) > 4 else list(len(keys))
+    first_keys = np.random.choice(keys, len(keys)//2) if len(keys) > 4 else list(keys) 
+    print(np.array(set(keys)-set(first_keys)))
+    print(type(np.array(set(keys)-set(first_keys))))
+    second_keys = np.random.choice(list(set(keys)-set(first_keys)), len(keys)//2) if len(keys) > 4 else list(keys)
     for i in first_keys:
         for j in second_keys:
             i = int(i)
@@ -181,7 +284,7 @@ def build_pairs1(x, y, s, samples_per_pair):
                 continue  # skip if no samples for a key
             if keys[i] == keys[j]:
                 continue
-            n_samples = min(samples_per_pair, counts[i], counts[j], (samples_per_pair//len(keys)))
+            n_samples = min(samples_per_pair, counts[i], counts[j], (samples_per_pair//(len(keys)//2)**2))
             indices0 = np.random.randint(0, counts[i], n_samples)
             indices1 = np.random.randint(0, counts[j], n_samples)
 
@@ -205,7 +308,10 @@ def build_pairs1(x, y, s, samples_per_pair):
                 y_train.extend(np.ones(n_samples))   # x0 ranked higher
             else:
                 y_train.extend(-np.ones(n_samples))  # x1 ranked higher
-
+    print(type(x0))
+    print(type(x0[0]))
+    print(type(x))
+    print(type(x[0]))
     x0 = torch.tensor(x0, dtype=torch.float32)
     x1 = torch.tensor(x1, dtype=torch.float32)
     s0 = torch.tensor(s0, dtype=torch.float32)
@@ -310,18 +416,26 @@ def build_pairs(x, y, y_bias, samples):
 
     return x0_tensor, x1_tensor, y_train_tensor, y0_bias_tensor, y1_bias_tensor
 
-# Example usage
-# x, y, y_bias would be your input data
-# x0_tensor, x1_tensor, y_train_tensor, y0_bias_tensor, y1_bias_tensor will be the outputs
 
-
-# Needs to got to BaseDatasets
-def convert_data_to_tensors(data, samples_per_pair=None):
-    (X_train, s_train, y_train), (X_val, s_val, y_val), (X_test, s_test, y_test) = data.get_data()
-    samples_per_pair = X_train.shape[0] if samples_per_pair is None else samples_per_pair
-    X_train0, X_train1, y_train, s_train0, s_train1 = build_pairs1(X_train, y_train, s_train, samples_per_pair)
-    samples_per_pair = X_val.shape[0] if samples_per_pair is None else samples_per_pair
-    X_val0, X_val1, y_val, s_val0, s_val1 = build_pairs1(X_val, y_val, s_val, samples_per_pair)
-    samples_per_pair = X_test.shape[0] if samples_per_pair is None else samples_per_pair
-    X_test0, X_test1, y_test, s_test0, s_test1= build_pairs1(X_test, y_test, s_test, samples_per_pair)
-    return X_train0, X_train1, s_train0, s_train1, y_train, X_val0, X_val1, s_val0, s_val1, y_val, X_test0, X_test1, s_test0, s_test1, y_test
+def convert_data_to_tensors(data, samples_per_pair=None, build_pairs=True):
+    (X_train, y_train, s_train), (X_val, y_val, s_val), (X_test, y_test, s_test) = data.get_data(convert_to_tensor=False)
+    if build_pairs:
+        samples_per_pair = X_train.shape[0] if samples_per_pair is None else samples_per_pair
+        X_train0, X_train1, y_train, s_train0, s_train1 = build_pairs1(X_train, y_train, s_train, samples_per_pair)
+        samples_per_pair = X_val.shape[0] if samples_per_pair is None else samples_per_pair
+        X_val0, X_val1, y_val, s_val0, s_val1 = build_pairs1(X_val, y_val, s_val, samples_per_pair)
+        samples_per_pair = X_test.shape[0] if samples_per_pair is None else samples_per_pair
+        X_test0, X_test1, y_test, s_test0, s_test1= build_pairs1(X_test, y_test, s_test, samples_per_pair)
+        return X_train0, X_train1, s_train0, s_train1, y_train, X_val0, X_val1, s_val0, s_val1, y_val, X_test0, X_test1, s_test0, s_test1, y_test
+    else:
+        X_train = torch.tensor(X_train, dtype=torch.float32)
+        s_train = torch.tensor(s_train, dtype=torch.float32)
+        y_train = torch.tensor(y_train, dtype=torch.float32)
+        X_val = torch.tensor(X_val, dtype=torch.float32)
+        s_val = torch.tensor(s_val, dtype=torch.float32)
+        y_val = torch.tensor(y_val, dtype=torch.float32)
+        X_test = torch.tensor(X_test, dtype=torch.float32)
+        s_test = torch.tensor(s_test, dtype=torch.float32)
+        y_test = torch.tensor(y_test, dtype=torch.float32)
+        return X_train, s_train, y_train, X_val, s_val, y_val, X_test, s_test, y_test
+    

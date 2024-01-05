@@ -1,6 +1,6 @@
 import numpy as np
 from sklearn.model_selection import train_test_split
-
+import torch
 
 def get_rand_chance(label_arr):
     if label_arr.ndim > 1:
@@ -22,7 +22,7 @@ class BaseDataset:
         raise NotImplementedError
 
     def get_data(self, random_state=42, test_size=0.2, val_size=0.2, val_split=True, preprocess_fn=None,
-                 y_onehot=False):
+                 y_onehot=False, convert_to_tensor=True):
         if not self.got_data:
             self.x_train, self.x_test, self.s_train, self.s_test, self.y_train, self.y_test = \
                 train_test_split(self.x_col.values, self.s_col.values, self.y_col.values, test_size=test_size,
@@ -45,11 +45,13 @@ class BaseDataset:
                 self.y_val_rand_chance = get_rand_chance(self.y_val)
                 self.s_val_rand_chance = get_rand_chance(self.s_val)
             self.got_data = True
+        if convert_to_tensor:
+            self.convert_data_to_tensor()
         if val_split:
-            return (self.x_train, self.s_train, self.y_train), (self.x_val, self.s_val, self.y_val), \
-                   (self.x_test, self.s_test, self.y_test)
+            return (self.x_train, self.y_train, self.s_train), (self.x_val, self.y_val, self.s_val), \
+                   (self.x_test, self.y_test, self.s_test)
         else:
-            return (self.x_train, self.s_train, self.y_train), (self.x_test, self.s_test, self.y_test)
+            return (self.x_train, self.y_train, self.s_train), (self.x_test, self.y_test, self.s_test)
 
     def sensitive_attribute(self):
         raise NotImplementedError
@@ -78,3 +80,15 @@ class BaseDataset:
         d["get_num_fair_classes"] = self.get_num_fair_classes()
         d["get_num_features"] = self.get_num_features()
         return d
+
+
+    def convert_data_to_tensor(self):
+        self.x_train = torch.tensor(self.x_train, dtype=torch.float32)
+        self.y_train = torch.tensor(self.y_train, dtype=torch.float32)
+        self.s_train = torch.tensor(self.s_train, dtype=torch.float32)
+        self.x_val = torch.tensor(self.x_val, dtype=torch.float32)
+        self.y_val = torch.tensor(self.y_val, dtype=torch.float32)
+        self.s_val = torch.tensor(self.s_val, dtype=torch.float32)
+        self.x_test = torch.tensor(self.x_test, dtype=torch.float32)
+        self.y_test = torch.tensor(self.y_test, dtype=torch.float32)
+        self.s_test = torch.tensor(self.s_test, dtype=torch.float32)

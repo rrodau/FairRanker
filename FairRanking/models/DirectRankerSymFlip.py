@@ -15,18 +15,7 @@ class DirectRankerSymFlip(BaseDirectRanker):
     :param feature_activation: tf function for the feature part of the net
     :param ranking_activation: tf function for the ranking part of the net
     :param feature_bias: boolean value if the feature part should contain a bias
-    :param kernel_initializer: tf kernel_initializer
-    :param start_batch_size: start value for increasing the sample size
-    :param end_batch_size: end value for increasing the sample size
-    :param learning_rate: learning rate for the optimizer
-    :param max_steps: total training steps
-    :param learning_rate_step_size: factor for increasing the learning rate
-    :param learning_rate_decay_factor: factor for increasing the learning rate
-    :param optimizer: tf optimizer object
-    :param print_step: for which step the script should print out the cost for the current batch
-    :param end_qids: end value for increasing the query size
-    :param start_qids: start value for increasing the query size
-    :param gamma: value how important the fair loss is
+    :param kernel_initializer: kernel_initializer
     """
 
     def __init__(self,
@@ -35,21 +24,9 @@ class DirectRankerSymFlip(BaseDirectRanker):
                  ranking_activation=nn.Tanh,
                  feature_bias=True,
                  kernel_initializer=nn.init.normal_,
-                 start_batch_size=100,
-                 end_batch_size=500,
-                 learning_rate=0.01,
-                 max_steps=3000,
-                 learning_rate_step_size=500,
-                 learning_rate_decay_factor=0.944,
-                 optimizer=optim.Adam,
-                 print_step=0,
                  dataset=None,
-                 end_qids=300,
-                 fair_loss="ranking",
-                 start_qids=10,
-                 random_seed=None,
+                 random_seed=42,
                  name="DirectRankerSymFlip",
-                 gamma=1.,
                  noise_module=False,
                  noise_type='sigmoid_full',
                  whiteout=False,
@@ -62,27 +39,24 @@ class DirectRankerSymFlip(BaseDirectRanker):
         super().__init__(hidden_layers=hidden_layers, dataset=dataset,
                          feature_activation=feature_activation, ranking_activation=ranking_activation,
                          feature_bias=feature_bias, kernel_initializer=kernel_initializer,
-                         start_batch_size=start_batch_size, end_batch_size=end_batch_size,
-                         learning_rate=learning_rate, max_steps=max_steps,
-                         learning_rate_step_size=learning_rate_step_size,
-                         learning_rate_decay_factor=learning_rate_decay_factor, optimizer=optimizer,
-                         print_step=print_step,
-                         end_qids=end_qids, start_qids=start_qids, random_seed=random_seed, name=name, gamma=gamma,
+                         random_seed=random_seed, name=name,
                          noise_module=noise_module, noise_type=noise_type, whiteout=whiteout,
                          uniform_noise=uniform_noise,
                          whiteout_gamma=whiteout_gamma, whiteout_lambda=whiteout_lambda, num_features=num_features,
                          num_fair_classes=num_fair_classes, save_dir=save_dir)
-        self.fair_loss = fair_loss
 
         self.feature_layers = nn.ModuleList()
-        prev_nodes = num_features
-        for num_nodes in self.hidden_layers:
-            self.feature_layers.append(nn.Linear(prev_nodes, num_nodes))
+        prev_neurons = num_features
+        for num_neurons in self.hidden_layers:
+            layer = nn.Linear(prev_neurons, num_neurons)
+            self.kernel_initializer(layer.weight)
+            self.feature_layers.append(layer)
+            prev_neurons = num_neurons
 
-        self.ranking_layer = nn.Linear(prev_nodes, 1, bias=False)
+        self.ranking_layer = nn.Linear(prev_neurons, 1, bias=False)
 
-        self.bias_layer = nn.Linear(prev_nodes, 1, bias=False)
-        self.bias_cls_layer = nn.Linear(prev_nodes, 1, bias=False) # reuse = True
+        self.bias_layer = nn.Linear(prev_neurons, 1, bias=False)
+        self.bias_cls_layer = nn.Linear(prev_neurons, 1, bias=False) 
     
 
     def forward(self, x0, x1):

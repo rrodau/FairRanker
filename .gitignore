@@ -4,6 +4,7 @@ __pycache__
 .ipynb_checkpoints
 .DS_Store
 *.pyc
+build
 
 # ignore test notebooks
 helperstest.ipynb
@@ -13,5 +14,4 @@ SandboxDirectRankerAdv.ipynb
 tets.ipynb
 plot_results.ipynb
 initializiationTest.ipynb
-
-# ignore models
+ExperimentDirectRankerAdv.ipynb

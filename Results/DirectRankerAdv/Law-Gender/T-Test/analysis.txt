@@ -1,0 +1,20 @@
+same Hyperarameters as Schedule02
+Scheudles: [1,1], [3,2]
+nDCG:
+    is nomral: True
+    Cohen's d: -0.47478062125078135
+    needed samples: 70.61
+    got samples: 30
+    p-value: 0.4280119196088735
+rND:
+    is normal: True
+    Cohen's d: 0.16076896224569637
+    needed samples: 608.30 
+    got samples: 30
+    p-value: 0.5359514505539011
+GPA:
+    is normal: False
+    Cohen's d: 0.20609377504365367
+    needed samples: 370.54
+    got samples: 30
+    p-value: 0.42801191960887356

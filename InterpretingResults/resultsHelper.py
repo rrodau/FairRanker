@@ -54,6 +54,7 @@ def cohen_d(group1, group2):
 
 
 def pearson_cc(group1, group2):
+    # TODO: wrong
     """
     Calculates the Pearson Correlation Coefficient
 

@@ -32,6 +32,7 @@ class Adult(BaseDataset):
         sensible_cols = ['9_ Female', '9_ Male']
         self.x_col = self.df[self.df.columns.difference(self.label_col + sensible_cols)]
         self.y_col = self.df[self.label_col]
+        #self.y_col = self.df.loc[:, self.label_col[0]]
         self.s_col = self.df[sensible_cols].astype('int64')
         self.num_relevance_classes = len(np.unique(self.y_col.values))
 

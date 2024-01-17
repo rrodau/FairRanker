@@ -1,0 +1,140 @@
+Adult
+    x == y:
+        mean nDCG: 0.89
+        mean rND: 0.27
+        mean GPA: 0.07
+
+    x > y:
+        mean nDCG: 0.89
+        mean rND: 0.32
+        mean GPA: 0.11
+    
+    x < y:
+        mean nDCG: 0.88
+        mean rND: 0.15
+        mean GPA: 0.05
+    
+    p values:
+        x > y and x < y
+            nDCG: 1.15e-11
+            rND: 5.01e-114
+            GPA: 1.81e-53
+
+        x > y and x == y
+            nDCG: 0.77
+            rND: 4.16e-28
+            GPA: 1.96e-24
+        
+        x < y and x == y:
+            nDCG: 5.16e-05
+            rND: 5.41e-36
+            GPA: 0.0005
+
+
+Compas
+    x == y:
+        mean nDCG: 0.65
+        mean rND: 0.29
+        mean GPA: 0.16
+
+    x > y:
+        mean nDCG: 0.67
+        mean rND: 0.31
+        mean GPA: 0.17
+
+    x < y:
+        mean nDCG: 0.51
+        mean rND: 0.19
+        mean GPA: 0.12
+
+    p values:
+        x > y and x < y
+            nDCG: 7.29e-48
+            rND: 4.83e-51
+            GPA: 6.93e-19
+
+        x > y and x == y
+            nDCG: 0.02
+            rND: 0.004
+            GPA: 0.13
+        
+        x < y and x == y:
+            nDCG: 5.49e-15
+            rND: 4.60e-15
+            GPA: 2.71e-05
+    
+
+Law-Gender
+    x == y:
+        mean nDCG: 0.81
+        mean rND: 0.06
+        mean GPA: 0.002
+
+    x > y:
+        mean nDCG: 0.81
+        mean rND: 0.06
+        mean GPA: 0.003
+
+    x < y:
+        mean nDCG: 0.84
+        mean rND: 0.06
+        mean GPA: 0.002
+
+    p values:
+        x > y and x < y
+            nDCG: 3.589014185209199e-08
+            rND: 0.88
+            GPA: 0.58
+
+        x > y and x == y
+            nDCG: 0.21
+            rND: 0.74
+            GPA: 0.40
+        
+        x < y and x == y:
+            nDCG: 0.01
+            rND: 0.81
+            GPA: 0.54
+
+
+
+Law-Race ([1,4], [4,1] missing)
+    x == y:
+        mean_ndcg: 0.79
+        mean_rND: 0.29
+        mean GPA: 0.014
+
+    x > y:
+        mean nDCG: 0.79
+        mean rND: 0.29
+        mean GPA: 0.02
+
+    x < y:
+        mean nDCG: 0.77
+        mean rND: 0.22
+        mean GPA: 0.05
+
+    p values:
+        x > y and x < y
+            nDCG: 0.03
+            rND: 6.54e-25
+            GPA: 2.32e-11
+
+        x > y and x == y
+            nDCG: 0.80
+            rND: 0.17
+            GPA: 0.15
+        
+        x < y and x == y:
+            nDCG: 0.26
+            rND: 1.31e-07
+            GPA: 0.00021
+
+
+Correlation between x and nDCG: 0.10
+Correlation between x and rND: 0.44
+Correlation between x and GPA: -0.28
+
+Corrleation between y and nDCG: -0.28
+Correlation between y and rND: -0.83
+Correlation between y and GPA: 0.73

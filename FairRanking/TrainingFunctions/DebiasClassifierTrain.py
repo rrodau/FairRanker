@@ -58,13 +58,9 @@ def train(model,
           use_validation = False,
           random_seed=42,
           path=None,
-          is_query_dataset=False):
-    if path:
-        with open(f'{path}results_extra_sensitive_training.csv', 'w') as file:
-            file.write(f'Schedule,SensitiveLoss\n')
-    if path:
-        with open(f'{path}results.csv', 'w') as file:
-            file.write(f'AUC,Accuracy,rND,NDCG,GPA,SensitiveLoss,Schedule\n')
+          is_query_dataset=False,
+          print_res=False,
+          writer=None):
     X_train, y_train, s_train = data[0]
     X_test, y_test, s_test = data[1]
     if use_validation:
@@ -79,6 +75,7 @@ def train(model,
     sensitive_loss_fn = nn.BCEWithLogitsLoss()
     sample_factor = np.log(
             1.0 * model.end_batch_size / model.start_batch_size)
+    losses = []
     for epoch in range(n_epochs):
         num_samples = int(model.start_batch_size * np.exp(
                 1.0 * sample_factor * epoch / n_epochs))
@@ -89,9 +86,19 @@ def train(model,
         model.train()
         for _ in range(schedule[0]):
             loss = main_phase(model, feed_dict['x'], feed_dict['y'], main_optimizer, loss_fn)
+            losses.append(loss.item())
         for _ in range(schedule[1]):
             adv_loss = adversarial_phase(model, feed_dict['x'], feed_dict['s'], adv_optimizer, sensitive_loss_fn)
-                
-        if epoch % 100 == 0:
-            print(f"{epoch}\{n_epochs}\t Loss: {loss}\t Sens Loss: {adv_loss}")
+        if writer is not None:
+            input = {
+                'Main Loss': [{'CrossEntropyLoss': loss}, epoch],
+                'Adversarial Loss': [{'BCE Loss': adv_loss}, epoch]
+            }
+            writer.write(**input)
+        if epoch % 100 == 0 and print_res:
+            if schedule[1]:
+                print(f"{epoch}\{n_epochs}\t Loss: {loss}\t Sens Loss: {adv_loss}")
+            else:
+                print(f"{epoch}\{n_epochs}\t Loss: {loss}")
+    print(f"Loss improvement: {losses[0]-losses[-1]}   Losses variation: {np.std(losses[10:])}")
     return model

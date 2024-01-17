@@ -46,7 +46,7 @@ def nDCG_cls(prediction, y, at=10, trec=False, reverse=True, k=1, m=1, esti=True
     """
     prediction = prediction.detach().numpy()
     y = y.detach().numpy()
-    if len(prediction[0]) > 1:
+    if esti:
         prediction = np.max(prediction, axis=1)
     rand = np.random.random(prediction.shape)
     sorted_list = [yi for _, _, yi in sorted(zip(prediction, rand, y), reverse=reverse)]
@@ -141,13 +141,14 @@ def nDCG_cls_no_model(predictions, y, at=10, trec=False, reverse=True, k=1, m=1,
         return float(nDCG)
 
 
-def auc_estimator2(prediction, y):
+def auc_estimator2(prediction, y, multiclass=False):
     """
     Calculates the auc by using the sklearn roc_auc_score function
     """
     prediction = prediction.detach().numpy()
     y = y.numpy()
-    if prediction.shape[1] == 1 and len(np.unique(y)) <= 2:
+    if not multiclass:
+        prediction = np.argmax(prediction, axis=1)
         auc = roc_auc_score(y, prediction)
     else:
         # binarize y 

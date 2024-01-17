@@ -129,8 +129,9 @@ class DebiasClassifier(BaseDirectRanker):
         """
         x = self.forward_extracted_features(x)
         x = self.flip_gradient(x)
-        for layer in self.debias_layers:
+        for layer in self.debias_layers[:-1]:
             x = self.feature_activation(layer(x))
+        x = self.debias_layers[-1](x)
         return x
 
 
@@ -148,6 +149,8 @@ class DebiasClassifier(BaseDirectRanker):
         idx = torch.randperm(len(x))[:samples]
         x_batch = x[idx]
         y_batch = one_hot_convert(y[idx], self.num_relevance_classes)
+        if len(y_batch.shape) > 2:
+            y_batch = y_batch.squeeze()
         y_bias_batch = y_bias[idx]
         return {'x': x_batch, 'y': y_batch, 's': y_bias_batch}
 
@@ -158,8 +161,9 @@ def one_hot_convert2(y, num_classes):
     return y_one_hot
 
 def one_hot_convert(y, num_classes):
+    return torch.nn.functional.one_hot(y.to(torch.int64), num_classes).to(torch.float32)
     y.detach().numpy()
     arr = np.zeros((len(y), num_classes))
     for i, yi in enumerate(y):
-        arr[i, int(yi) - 1] = 1
+        arr[i, int(yi)] = 1
     return torch.tensor(arr, dtype=torch.float32)

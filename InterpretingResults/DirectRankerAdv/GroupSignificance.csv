@@ -1,0 +1,13 @@
+,Dataset,Metric,x > y vs x < y,x < y vs x == y,x > y vs x == y
+0,Adult,nDCG,significant,significant,not significant
+0,Adult,rND,significant,significant,significant
+0,Adult,GPA,significant,significant,significant
+0,Compas,nDCG,significant,significant,significant
+0,Compas,rND,significant,significant,significant
+0,Compas,GPA,significant,significant,significant
+0,Law-Gender,nDCG,significant,significant,significant
+0,Law-Gender,rND,not significant,not significant,not significant
+0,Law-Gender,GPA,not significant,significant,significant
+0,Law-Race,nDCG,significant,not significant,not significant
+0,Law-Race,rND,significant,significant,significant
+0,Law-Race,GPA,significant,significant,significant

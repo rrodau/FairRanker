@@ -1,7 +1,7 @@
 from FairRanking.datasets.BaseDataset import BaseDataset, get_rand_chance
 import pandas as pd
 import numpy as np
-
+from sklearn.preprocessing import StandardScaler
 
 class Compas(BaseDataset):
 
@@ -17,10 +17,12 @@ class Compas(BaseDataset):
 
     def load_data(self):
         self.df = pd.read_csv(self.path_to_file())
-        self.y_col = self.df.loc[:, self.class_attribute()]
+        self.y_col = self.df.loc[:, self.class_attribute()] - 1
         s_name = [col_name for col_name in self.df.columns if col_name.startswith(self.sensitive_attribute())]
         self.s_col = self.df.loc[:, s_name]
         x_name = set(self.df.columns) - set([self.class_attribute()]) - set(s_name) - set([self.discard_columns()])
+        scaler = StandardScaler()
+        self.df.loc[:, x_name] = scaler.fit_transform(self.df.loc[:, x_name])
         self.x_col = self.df.loc[:, x_name]
         self.num_features = len(self.x_col.columns)
         self.num_relevance_classes = len(np.unique(self.y_col.values))

@@ -113,31 +113,25 @@ class BaseDirectRanker(nn.Module):
 
    
     def create_noise_module(self, input_0, input_1):
-        alpha = nn.Parameter(torch.empty(self.num_features))
-        w_beta = nn.Parameter(torch.empty(self.num_features))
-
-
-        self.kernel_initializer(alpha)
-        self.kernel_initializer(w_beta)
         # Create noise tensor
         if self.uniform_noise == 1:
             noise = np.random.uniform(low=-1, high=1, size=self.num_features)
         else:
             noise = np.random.normal(size=self.num_features)           
-        beta = torch.tensor(noise) * w_beta
+        beta = torch.tensor(noise, dtype=torch.float32) * self.w_beta
 
         if self.noise_type == 'default':
-            in_noise_0 = input_0 * alpha + beta
-            in_noise_1 = input_1 * alpha + beta
+            in_noise_0 = input_0 * self.alpha + beta
+            in_noise_1 = input_1 * self.alpha + beta
         elif self.noise_type == 'sigmoid_full':
-            in_noise_0 = torch.sigmoid(input_0 * alpha + beta)
-            in_noise_1 = torch.sigmoid(input_1 * alpha + beta)
+            in_noise_0 = torch.sigmoid(input_0 * self.alpha + beta)
+            in_noise_1 = torch.sigmoid(input_1 * self.alpha + beta)
         elif self.noise_type == 'sigmoid_sep':
-            in_noise_0 = torch.sigmoid(input_0 * alpha) + torch.sigmoid(beta)
-            in_noise_1 = torch.sigmoid(input_1 * alpha) + torch.sigmoid(beta)
+            in_noise_0 = torch.sigmoid(input_0 * self.alpha) + torch.sigmoid(beta)
+            in_noise_1 = torch.sigmoid(input_1 * self.alpha) + torch.sigmoid(beta)
         elif self.noise_type == 'sigmoid_sep_2':
-            in_noise_0 = (torch.sigmoid(input_0 * alpha) + torch.sigmoid(beta)) / 2
-            in_noise_1 = (torch.sigmoid(input_1 * alpha) + torch.sigmoid(beta)) / 2
+            in_noise_0 = (torch.sigmoid(input_0 * self.alpha) + torch.sigmoid(beta)) / 2
+            in_noise_1 = (torch.sigmoid(input_1 * self.alpha) + torch.sigmoid(beta)) / 2
 
         return in_noise_0, in_noise_1
 

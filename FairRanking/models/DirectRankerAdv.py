@@ -75,7 +75,14 @@ class DirectRankerAdv(BaseDirectRanker):
         # Output from the Feature Layers goes into the Ranking Layer 
         self.ranking_layer = nn.Linear(prev_neurons_extracted, 1, bias=False)  
         self.flip_gradient = CustomLayer()
-        
+        if self.noise_module:
+            self.alpha = nn.Parameter(torch.empty(self.num_features, dtype=torch.float32))
+            self.w_beta = nn.Parameter(torch.empty(self.num_features, dtype=torch.float32))
+
+
+            self.kernel_initializer(self.alpha)
+            self.kernel_initializer(self.w_beta)
+            
 
     def forward(self, x0: torch.Tensor, x1: torch.Tensor) -> torch.Tensor:
         """
@@ -97,7 +104,6 @@ class DirectRankerAdv(BaseDirectRanker):
             in_0, in_1 = self.create_noise_module(x0, x1)
         else:
             in_0, in_1 = x0, x1
-
         # Process through Feature Layers
         in_0 = self.forward_extracted_features(in_0)
         in_1 = self.forward_extracted_features(in_1)

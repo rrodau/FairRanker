@@ -4,7 +4,8 @@ __pycache__
 .ipynb_checkpoints
 .DS_Store
 *.pyc
-build/lib
+build/*
+Experiments/*
 
 # ignore test notebooks
 helperstest.ipynb
